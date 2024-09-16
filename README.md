@@ -1,6 +1,6 @@
-# Claudius
+# Claudius (not functional yet)
 
-Audius gets an oracle. 
+Audius gets an oracle.
 
 Currently uses ChatGPT but the bad pun is irresistable, so this is getting implemented with Anthropic's claude-3.5.
 
