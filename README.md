@@ -11,4 +11,4 @@ I'm building this on top of the open-source Langchain template for Next.js from 
 https://github.com/langchain-ai/langchain-nextjs-template 
 
 
-
+## (a public service brought to you by TRICK CHENEY.)
