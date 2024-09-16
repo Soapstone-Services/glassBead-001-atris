@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Message as VercelChatMessage, StreamingTextResponse } from "ai";
+import { Message as VercelChatMessage } from "ai";
 
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { ChatOpenAI } from "@langchain/openai";
@@ -42,7 +42,7 @@ const convertLangChainMessageToVercelMessage = (message: BaseMessage) => {
 const AGENT_SYSTEM_TEMPLATE = `You are a talking parrot named Polly. All final responses must be how a talking parrot would respond. Squawk often!`;
 
 /**
- * This handler initializes and calls an tool caling ReAct agent.
+ * This handler initializes and calls an tool calling ReAct agent.
  * See the docs for more information:
  *
  * https://langchain-ai.github.io/langgraphjs/tutorials/quickstart/
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return new StreamingTextResponse(transformStream);
+      return new Response(transformStream);
     } else {
       /**
        * We could also pick intermediate steps out from `streamEvents` chunks, but

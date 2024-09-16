@@ -3,6 +3,7 @@
 import { readStreamableValue } from "ai/rsc";
 import React, { useEffect, useRef, useState } from "react";
 import { executeTool } from "./action";
+import { AudiusAPI } from "./audiusAPI";
 
 export default function Page() {
   const [input, setInput] = useState("");

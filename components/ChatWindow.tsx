@@ -40,7 +40,7 @@ export function ChatWindow(props: {
   const { messages, input, setInput, handleInputChange, handleSubmit, isLoading: chatEndpointIsLoading, setMessages } =
     useChat({
       api: endpoint,
-      onResponse(response) {
+      onResponse(response:Response) {
         const sourcesHeader = response.headers.get("x-sources");
         const sources = sourcesHeader ? JSON.parse((Buffer.from(sourcesHeader, 'base64')).toString('utf8')) : [];
         const messageIndexHeader = response.headers.get("x-message-index");
@@ -49,7 +49,7 @@ export function ChatWindow(props: {
         }
       },
       streamMode: "text",
-      onError: (e) => {
+      onError: (e:Error) => {
         toast(e.message, {
           theme: "dark"
         });

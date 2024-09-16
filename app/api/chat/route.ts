@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Message as VercelChatMessage, StreamingTextResponse } from "ai";
+import { AudiusAPI } from "../../ai_sdk/tools/audiusAPI";
 
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
@@ -11,13 +12,23 @@ const formatMessage = (message: VercelChatMessage) => {
   return `${message.role}: ${message.content}`;
 };
 
-const TEMPLATE = `You are a pirate named Patchy. All responses must be extremely verbose and in pirate dialect.
+const TEMPLATE = `You are a helpful assistant that can answer questions about Audius based on user input.
 
 Current conversation:
 {chat_history}
 
 User: {input}
 AI:`;
+
+const audiusTool = new AudiusAPI("audius-chatbot-dos");
+
+let tools: any[] = [];
+
+// Initialize tools before the route handler
+(async () => {
+  await audiusTool.initialize();
+  tools = [audiusTool];
+})();
 
 /**
  * This handler initializes and calls a simple chain with a prompt,
@@ -26,6 +37,11 @@ AI:`;
  * https://js.langchain.com/docs/guides/expression_language/cookbook#prompttemplate--llm--outputparser
  */
 export async function POST(req: NextRequest) {
+  // Ensure tools are initialized before using them
+  if (tools.length === 0) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
   try {
     const body = await req.json();
     const messages = body.messages ?? [];
