@@ -1,35 +1,72 @@
-console.log('Test file is being executed');
-
-// Import the AudiusAPI class from the implementation file
 import { AudiusAPI } from '../app/ai_sdk/tools/audiusAPI';
+import fetch from 'node-fetch';
 
-console.log('AudiusAPI imported successfully');
+// Mock node-fetch
+jest.mock('node-fetch');
+const mockedFetch = fetch as jest.MockedFunction<typeof fetch>;
 
-async function testAudiusAPI() {
-  console.log('Creating AudiusAPI instance...');
-  // Create a new instance of AudiusAPI with a test app name
-  const audiusAPI = new AudiusAPI('audius-chatbot-dos');
-  console.log('AudiusAPI instance created');
+describe('AudiusAPI', () => {
+  let audiusAPI: AudiusAPI;
 
-  try {
-    console.log('Initializing AudiusAPI...');
-    // Call the initialize method to set up the API host
+  beforeEach(() => {
+    // Create a new instance before each test
+    audiusAPI = new AudiusAPI();
+    
+    // Reset all mocks before each test
+    jest.resetAllMocks();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('should initialize correctly', async () => {
+    mockedFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(['https://example.audius.co']),
+    } as any);
+
+    await expect(audiusAPI.initialize()).resolves.not.toThrow();
+    expect(mockedFetch).toHaveBeenCalledTimes(1);
+    expect(mockedFetch).toHaveBeenCalledWith('https://api.audius.co');
+  });
+
+  test('should search tracks successfully', async () => {
+    const mockSearchResult = {
+      data: [{ id: '1', title: 'Test Track' }],
+      total: 1,
+    };
+
+    mockedFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(['https://example.audius.co']),
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSearchResult),
+      } as any);
+
     await audiusAPI.initialize();
-    console.log('AudiusAPI initialized');
+    const result = await audiusAPI.searchTracks({ query: 'electronic music' });
+    expect(result).toEqual(mockSearchResult);
+    expect(mockedFetch).toHaveBeenCalledTimes(2); // Once for initialize, once for search
+  });
 
-    console.log('Calling AudiusAPI search method...');
-    // Test the search method instead of _call
-    const result = await audiusAPI.search('electronic music');
-    console.log('AudiusAPI search result:', result);
-  } catch (error) {
-    // Log any errors that occur during the test
-    console.error('Error during AudiusAPI test:', error);
-  }
-}
+  test('should handle API errors', async () => {
+    mockedFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(['https://example.audius.co']),
+      } as any)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      } as any);
 
-// Execute the test function and handle any unhandled promise rejections
-testAudiusAPI().then(() => {
-  console.log('Test file execution complete');
-}).catch((error) => {
-  console.error('Unhandled error in test execution:', error);
+    await audiusAPI.initialize();
+    await expect(audiusAPI.searchTracks({ query: 'electronic music' })).rejects.toThrow('Audius API request failed: HTTP 500');
+  });
+
+  // Add more tests for other methods and scenarios...
 });
