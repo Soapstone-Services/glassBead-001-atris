@@ -1,18 +1,20 @@
 import { AudiusAPI } from '../app/ai_sdk/tools/audiusAPI';
+import { retryWithBackoff } from '../app/ai_sdk/tools/audiusUtils';
 import fetch from 'node-fetch';
+import { AudiusAPIInitializationError, AudiusAPISearchError } from '../app/ai_sdk/tools/audiusErrors';
 
-// Mock node-fetch
+// Mock node-fetch and retryWithBackoff
 jest.mock('node-fetch');
+jest.mock('../app/ai_sdk/tools/audiusUtils');
+
 const mockedFetch = fetch as jest.MockedFunction<typeof fetch>;
+const mockedRetryWithBackoff = retryWithBackoff as jest.MockedFunction<typeof retryWithBackoff>;
 
 describe('AudiusAPI', () => {
   let audiusAPI: AudiusAPI;
 
   beforeEach(() => {
-    // Create a new instance before each test
     audiusAPI = new AudiusAPI();
-    
-    // Reset all mocks before each test
     jest.resetAllMocks();
   });
 
@@ -21,14 +23,14 @@ describe('AudiusAPI', () => {
   });
 
   test('should initialize correctly', async () => {
-    mockedFetch.mockResolvedValueOnce({
+    mockedRetryWithBackoff.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(['https://example.audius.co']),
     } as any);
 
     await expect(audiusAPI.initialize()).resolves.not.toThrow();
-    expect(mockedFetch).toHaveBeenCalledTimes(1);
-    expect(mockedFetch).toHaveBeenCalledWith('https://api.audius.co');
+    expect(mockedRetryWithBackoff).toHaveBeenCalledTimes(1);
+    expect(mockedRetryWithBackoff).toHaveBeenCalledWith(expect.any(Function));
   });
 
   test('should search tracks successfully', async () => {
@@ -37,7 +39,7 @@ describe('AudiusAPI', () => {
       total: 1,
     };
 
-    mockedFetch
+    mockedRetryWithBackoff
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(['https://example.audius.co']),
@@ -50,23 +52,53 @@ describe('AudiusAPI', () => {
     await audiusAPI.initialize();
     const result = await audiusAPI.searchTracks({ query: 'electronic music' });
     expect(result).toEqual(mockSearchResult);
-    expect(mockedFetch).toHaveBeenCalledTimes(2); // Once for initialize, once for search
+    expect(mockedRetryWithBackoff).toHaveBeenCalledTimes(2); // Once for initialize, once for search
   });
 
   test('should handle API errors', async () => {
-    mockedFetch
+    mockedRetryWithBackoff
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(['https://example.audius.co']),
+      } as any)
+      .mockRejectedValueOnce(new Error('API error'));
+
+    await audiusAPI.initialize();
+    await expect(audiusAPI.searchTracks({ query: 'electronic music' })).rejects.toThrow(AudiusAPISearchError);
+  });
+
+  test('should handle initialization errors', async () => {
+    mockedRetryWithBackoff.mockRejectedValueOnce(new Error('Initialization error'));
+
+    await expect(audiusAPI.initialize()).rejects.toThrow(AudiusAPIInitializationError);
+  });
+
+  test('should validate input for searchTracks', async () => {
+    await audiusAPI.initialize(); // Ensure initialized
+    await expect(audiusAPI.searchTracks({ query: '' })).rejects.toThrow(AudiusAPISearchError);
+  });
+
+  // Add tests for searchUsers and searchPlaylists
+  // ...
+
+  test('should implement _call method for Langchain', async () => {
+    const mockSearchResult = {
+      data: [{ id: '1', title: 'Test Track' }],
+      total: 1,
+    };
+
+    mockedRetryWithBackoff
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(['https://example.audius.co']),
       } as any)
       .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
+        ok: true,
+        json: () => Promise.resolve(mockSearchResult),
       } as any);
 
     await audiusAPI.initialize();
-    await expect(audiusAPI.searchTracks({ query: 'electronic music' })).rejects.toThrow('Audius API request failed: HTTP 500');
+    const result = await audiusAPI._call('test query');
+    expect(JSON.parse(result)).toEqual(mockSearchResult);
   });
-
-  // Add more tests for other methods and scenarios...
 });

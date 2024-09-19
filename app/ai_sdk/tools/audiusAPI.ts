@@ -1,8 +1,16 @@
+import { 
+  TrackSearchParamsSchema, 
+  UserSearchParamsSchema, 
+  PlaylistSearchParamsSchema,
+  TrackSearchParameters,
+  UserSearchParameters,
+  PlaylistSearchParameters
+} from './audiusSchemas';
 import { retryWithBackoff } from './audiusUtils';
 import fetch from 'node-fetch';
 import { Tool } from "langchain/tools";
 import { z } from 'zod';
-import { TrackSearchParameters, Track, SearchResponse, User, Playlist } from './audiusTypes';
+import { Track, SearchResponse, User, Playlist } from './audiusTypes';
 import { AudiusAPIError, AudiusAPIInitializationError, AudiusAPISearchError } from './audiusErrors';
 
 const logger = {
@@ -10,31 +18,14 @@ const logger = {
   info: (message: string) => console.log(`[INFO] ${message}`),
 };
 
-const TrackSearchParamsSchema = z.object({
-  query: z.string().min(1),
-  only_downloadable: z.boolean().optional(),
-  tags: z.string().optional(),
-  genre: z.string().optional(),
-  user_id: z.number().int().positive().optional(),
-});
-
-type ValidatedTrackSearchParams = z.infer<typeof TrackSearchParamsSchema>;
-
-/**
- * AudiusAPI class for interacting with the Audius API.
- * This class extends the Langchain Tool for integration with Langchain workflows.
- */
 export class AudiusAPI extends Tool {
   name = "AudiusAPI";
   description = "Search for tracks, users, and playlists on Audius";
   private host: string | null = null;
   private appName: string;
-  private readonly DISCOVERY_PROVIDER = 'https://api.audius.co';
 
-  /**
-   * Creates an instance of AudiusAPI.
-   * @param {string} [appName] - The name of the app using this API. If not provided, falls back to environment variable or default value.
-   */
+  private static readonly DISCOVERY_PROVIDER = 'https://api.audius.co';
+
   constructor(appName?: string) {
     super();
     this.appName = appName || process.env.AUDIUS_APP_NAME || 'AudiusAPITool';
@@ -46,7 +37,7 @@ export class AudiusAPI extends Tool {
    */
   async initialize() {
     try {
-      const response = await retryWithBackoff(() => fetch(this.DISCOVERY_PROVIDER), 3, 1000);
+      const response = await retryWithBackoff(() => fetch(AudiusAPI.DISCOVERY_PROVIDER), 3, 1000);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -80,21 +71,14 @@ export class AudiusAPI extends Tool {
    * @throws {AudiusAPISearchError} If the search fails.
    */
   async searchTracks(params: TrackSearchParameters): Promise<SearchResponse<Track>> {
-    const host = await this.getHost();
-    const url = new URL(`${host}/v1/tracks/search`);
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, value.toString());
-    });
-
     try {
-      const response = await retryWithBackoff(() => fetch(url.toString()));
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const validatedParams = TrackSearchParamsSchema.parse(params);
+      return this.search('tracks', validatedParams);
     } catch (error) {
-      logger.error('Error searching tracks:', error);
-      throw new AudiusAPISearchError('Failed to search tracks');
+      if (error instanceof z.ZodError) {
+        throw new AudiusAPISearchError(`Invalid input for track search: ${error.message}`);
+      }
+      throw error;
     }
   }
 
@@ -103,8 +87,16 @@ export class AudiusAPI extends Tool {
    * @param {Omit<ValidatedTrackSearchParams, 'only_downloadable'>} params - The search parameters.
    * @returns {Promise<SearchResponse<User>>} The search results.
    */
-  async searchUsers(params: Omit<ValidatedTrackSearchParams, 'only_downloadable'>): Promise<SearchResponse<User>> {
-    return this.search('users', params);
+  async searchUsers(params: UserSearchParameters): Promise<SearchResponse<User>> {
+    try {
+      const validatedParams = UserSearchParamsSchema.parse(params);
+      return this.search('users', validatedParams);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new AudiusAPISearchError(`Invalid input for user search: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -112,8 +104,16 @@ export class AudiusAPI extends Tool {
    * @param {Omit<ValidatedTrackSearchParams, 'only_downloadable'>} params - The search parameters.
    * @returns {Promise<SearchResponse<Playlist>>} The search results.
    */
-  async searchPlaylists(params: Omit<ValidatedTrackSearchParams, 'only_downloadable'>): Promise<SearchResponse<Playlist>> {
-    return this.search('playlists', params);
+  async searchPlaylists(params: PlaylistSearchParameters): Promise<SearchResponse<Playlist>> {
+    try {
+      const validatedParams = PlaylistSearchParamsSchema.parse(params);
+      return this.search('playlists', validatedParams);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new AudiusAPISearchError(`Invalid input for playlist search: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   /**
