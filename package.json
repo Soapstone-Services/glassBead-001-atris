@@ -1,6 +1,7 @@
 {
-  "name": "langchain-nextjs-template",
-  "version": "0.0.0",
+  "name": "audius-ai-sdk",
+  "version": "0.1.0",
+  "description": "An AI-powered SDK for interacting with the Audius API using LangChain",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write \"app\"",
-    "test": "jest"
+    "test": "jest",
+    "test:integration": "jest --config jest.integration.config.js"
   },
   "engines": {
     "node": ">=18"
@@ -27,6 +29,7 @@
     "@types/validator": "^13.12.1",
     "ai": "^3.3.37",
     "autoprefixer": "10.4.14",
+    "dotenv": "^16.4.5",
     "eslint": "8.46.0",
     "eslint-config-next": "13.4.12",
     "langchain": "^0.3.2",

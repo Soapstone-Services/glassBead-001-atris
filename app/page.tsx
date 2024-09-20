@@ -1,38 +1,76 @@
-import { ChatWindow } from "@/components/ChatWindow";
-import dynamic from 'next/dynamic';
+'use client'
 
-const AudiusSearch = dynamic(() => import('../components/AudiusSearch'), { ssr: false });
+import { useState } from 'react'
 
 export default function Home() {
-  const InfoCard = (
-    <div className="p-4 md:p-8 rounded bg-[#25252d] w-full max-h-[85%] overflow-hidden">
-      <h1 className="text-3xl md:text-4xl mb-4">
-        Audius Insights 🎵
-      </h1>
-      <ul>
-        <li className="text-l">
-          🔍 <span className="ml-2">Search for artists and tracks on Audius.</span>
-        </li>
-        <li className="text-l">
-          📊 <span className="ml-2">Get insights on your music and artist profile.</span>
-        </li>
-        <li className="text-l">
-          💬 <span className="ml-2">Ask questions about Audius and get AI-powered answers.</span>
-        </li>
-      </ul>
-    </div>
-  );
+  const [input, setInput] = useState('')
+  const [messages, setMessages] = useState<{ role: 'user' | 'bot', content: string }[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim()) return
+
+    setIsLoading(true)
+    setMessages(prev => [...prev, { role: 'user', content: input }])
+    setInput('')
+
+    try {
+      const response = await fetch('/api/chatbot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: input }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from chatbot')
+      }
+
+      const data = await response.json()
+      setMessages(prev => [...prev, { role: 'bot', content: data.response }])
+    } catch (error) {
+      console.error('Error:', error)
+      setMessages(prev => [...prev, { role: 'bot', content: 'Sorry, an error occurred. Please try again.' }])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
-    <div className="flex flex-col h-screen">
-      <AudiusSearch />
-      <ChatWindow
-        endpoint="api/chat"
-        emoji="🎵"
-        titleText="Audius Assistant"
-        placeholder="Ask about Audius, music trends, or get insights on artists..."
-        emptyStateComponent={InfoCard}
-      />
-    </div>
-  );
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm">
+        <h1 className="text-4xl font-bold mb-4">Audius AI Chatbot</h1>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="h-[400px] overflow-y-auto mb-4">
+            {messages.map((message, index) => (
+              <div key={index} className={`mb-2 ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
+                <span className={`inline-block p-2 rounded-lg ${message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>
+                  {message.content}
+                </span>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={handleSubmit} className="flex">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask about Audius music or artists..."
+              className="flex-grow p-2 border rounded-l-lg"
+              disabled={isLoading}
+            />
+            <button
+              type="submit"
+              className="bg-blue-500 text-white p-2 rounded-r-lg"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Sending...' : 'Send'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+  )
 }
