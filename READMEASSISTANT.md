@@ -1,7 +1,7 @@
 # AI Assistant Context for Audius API Integration Project
 
 ## Project Overview
-This project integrates the Audius API into a LangChain-based application, creating an SDK for seamless interaction with Audius services. The focus is on search functionalities for users, playlists, and tracks, incorporating this SDK into a LangChain agent for AI-driven interactions with the Audius platform.
+This project integrates the Audius API into a LangChain-based application, creating an SDK for seamless interaction with Audius services. The focus is on search functionalities for users, playlists, and tracks, incorporating this SDK into a LangChain agent for AI-driven interactions with the Audius platform. This file exists to provide context for AI assistants in developer workflow.
 
 ## Current Focus
 - Refining the AudiusAPI class implementation
@@ -17,28 +17,49 @@ This project integrates the Audius API into a LangChain-based application, creat
 6. Constants (audiusConstants.ts)
 
 ## Recent Developments
-- Implemented a robust _call method in AudiusAPI class with improved input parsing
-- Enhanced string normalization for better track matching
-- Improved error handling and logging in AudiusAPI class
-- Updated the AudiusAgent to handle streaming events more effectively
-
-## Testing
-### Current Test Files
-- audiusAPI.integration.test.ts
-- langchainIntegration.test.ts
+- Integrated the official Audius SDK (@audius/sdk) into the project
+- Refactored AudiusAPI class to use the Audius SDK
+- Simplified code by removing custom utility functions now handled by the SDK
+- Updated tests to work with the new SDK-based implementation
 
 ## Next Steps
-1. Further refine input parsing in the AudiusAPI _call method
-2. Implement more comprehensive error handling in the AudiusAgent
-3. Expand test coverage for edge cases in AudiusAPI class
-4. Optimize the agent's prompt for more accurate Audius-related queries
-5. Implement rate limiting and caching mechanisms for API calls
-6. Enhance the streaming functionality to provide more detailed intermediate results
+1. Further optimize the AudiusAPI _call method for better query parsing
+2. Explore additional features provided by the Audius SDK
+3. Update documentation to reflect the use of the official SDK
+4. Investigate potential performance improvements with the SDK integration
+
+## Chatbot Functionality Expansion Plan
+
+### Priority Order (from simplest to most complex):
+1. Simple queries (e.g., follower count, track play count)
+2. Moderately complex queries (e.g., most popular song of an artist)
+3. Complex queries (e.g., percentage increase in popularity over time)
+
+### Key Features to Implement:
+1. Trending content queries (tracks and playlists, including genre-specific)
+2. User authentication for personalized features
+3. Recommendation engine capabilities
+4. Social features (e.g., popular tracks among followers)
+5. Comparative queries about tracks, artists, and playlists
+6. Retrieval and presentation of popularity and engagement metrics
+
+### Future Considerations:
+- Advanced playlist analysis based on track attributes
+- Resolving Audius app names to full URLs (lower priority)
+
+### Implementation Strategy:
+- Utilize Audius SDK methods for efficient data retrieval and processing
+- Develop handlers for each query type, starting with simpler queries
+- Implement user authentication while maintaining functionality for non-logged-in users
+- Focus on accurate and relevant information provision about Audius content, artists, and trends
+
+### Non-priorities:
+- Streaming functionality
 
 ## Notes for Development
-- Consider implementing fuzzy matching for track and artist names
-- Explore ways to improve search accuracy, especially for tracks with similar titles
-- Investigate potential optimizations for the search process in the AudiusAPI class
+- Continuously refine the chatbot's natural language understanding capabilities
+- Regularly test and optimize query handling efficiency
+- Consider scalability and performance as the chatbot's capabilities expand
 
 ## Version Information
 - Langchain version: 0.3.2
@@ -47,7 +68,8 @@ This project integrates the Audius API into a LangChain-based application, creat
 - Node.js version: >=18
 
 ## Changelog
-[Current Date]: Updated READMEASSISTANT.md with recent improvements in input parsing and track matching. All integration tests are now passing.
+[Current Date]: Updated READMEASSISTANT.md with comprehensive plan for chatbot functionality expansion using Audius SDK.
+[Previous Date]: Updated READMEASSISTANT.md with recent improvements in input parsing and track matching. All integration tests are now passing.
 
 ## Summary of Chatbot Implementation Process
 
@@ -75,3 +97,24 @@ Throughout this process, we've maintained a focus on code quality, readability, 
 Our development workflow has been iterative, with each improvement building on the lessons learned from previous iterations. We've maintained a balance between adding new features and refining existing functionality, always with the goal of providing the best possible user experience for interacting with the Audius platform through our chatbot.
 As we continue to develop and refine this integration, we're keeping an eye on potential future enhancements, such as expanding the range of queries our tool can handle, improving the natural language understanding capabilities of our chatbot, and potentially integrating with other music-related APIs to provide a more comprehensive music discovery experience.
 In conclusion, our workflow for implementing the Audius API integration into a LangChain-based chatbot has been a process of continuous improvement, focused on enhancing accuracy, reliability, and user experience. By iteratively refining our implementation, particularly the critical call method in the AudiusAPI class, we've created a robust tool that can effectively search and retrieve information from the Audius platform in response to natural language queries. As we move forward, we'll continue to build on this foundation, addressing challenges and implementing new features to create an even more powerful and user-friendly music discovery chatbot.
+
+## Future Improvements for READMEASSISTANT.md
+
+To enhance the usefulness of this file for AI context, consider implementing the following improvements:
+
+1. Add representative code snippets for key components
+2. Include an architecture diagram showing relationships between major components
+3. List main Audius API endpoints being used
+4. Add a section on common issues or gotchas
+5. Provide an overview of the project's file/folder structure
+6. Include more detailed environment setup information
+7. Add brief contribution guidelines
+8. Include key performance metrics or goals, if available
+9. Add brief descriptions of target users or use cases
+10. Include a glossary of project-specific terms
+11. Expand the version history with major feature additions or architectural changes
+12. Provide a more structured future roadmap
+13. Include a brief overview of the testing strategy
+14. Add links to relevant external resources (e.g., Audius API docs, LangChain guides)
+
+Implementing these improvements will provide more comprehensive context for AI assistants, enabling more informed and relevant responses throughout development conversations.

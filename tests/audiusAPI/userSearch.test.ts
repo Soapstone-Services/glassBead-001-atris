@@ -1,4 +1,4 @@
-import { AudiusAPI } from '../../app/ai_sdk/tools/audiusAPI';
+import { AudiusAPI } from '../../app/ai_sdk/tools/audius/audiusAPI';
 import { retryWithBackoff } from '../../app/ai_sdk/tools/audiusUtils';
 import { AudiusAPISearchError } from '../../app/ai_sdk/tools/audiusErrors';
 import { User, SearchResponse } from '../../app/ai_sdk/tools/audiusTypes';

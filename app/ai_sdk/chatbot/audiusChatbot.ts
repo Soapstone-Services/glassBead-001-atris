@@ -1,11 +1,7 @@
-import { AudiusAPI } from '../tools/audiusAPI';
+import { AudiusAPI } from '../tools/audius/audiusAPI';
 
 export class AudiusChatbot {
   constructor(private audiusAPI: AudiusAPI) {}
-
-  async initialize() {
-    await this.audiusAPI.initialize();
-  }
   
   async processMessage(input: string): Promise<string> {
     try {
