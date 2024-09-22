@@ -20,7 +20,7 @@ The chatbot in this repo is not good: you can ask it how many plays a certain so
 First, clone this repo and download it locally.
 
 Next, you'll need to set up environment variables in your repo's `.env.local` file. Copy the `.env.example` file to `.env.local`.
-To start with the basic examples, you'll just need to add your OpenAI API key. I have a [constants.ts](app/lib/chat/constants.ts) file with variables for the keys and such you'll need to generate/provide separately. Everything's either free or very, very cheap to use (< $0.05/week if you're developing a *lot*).
+To start with the basic examples, you'll just need to add your OpenAI API key.
 
 Next, install the required packages using your preferred package manager (e.g. `npm`).
 
