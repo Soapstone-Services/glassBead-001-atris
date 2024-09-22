@@ -1,6 +1,14 @@
 {
-    "cursor.general.disableHttp2": false,
-    "cSpell.words": [
-        "audius"
-    ]
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "cSpell.words": [
+    "audius"
+  ],
+  "cursor.general.disableHttp2": false,
+  "deno.enablePaths": [
+    "supabase/functions"
+  ],
+  "deno.lint": true,
+  "deno.unstable": true
 }

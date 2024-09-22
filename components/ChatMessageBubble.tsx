@@ -1,38 +1,45 @@
-import type { Message } from "ai/react";
+import { ReactNode } from "react";
+
+type Message = {
+  id: string;
+  role: string;
+  content: string;
+};
 
 export function ChatMessageBubble(props: { message: Message, aiEmoji?: string, sources: any[] }) {
-  const colorClassName =
-    props.message.role === "user" ? "bg-sky-600" : "bg-slate-50 text-black";
-  const alignmentClassName =
-    props.message.role === "user" ? "ml-auto" : "mr-auto";
-  const prefix = props.message.role === "user" ? "🧑" : props.aiEmoji;
+  const isUser = props.message.role === "user";
+  const prefix = isUser ? "🧑" : props.aiEmoji || "🤖";
+
   return (
-    <div
-      className={`${alignmentClassName} ${colorClassName} rounded px-4 py-2 max-w-[80%] mb-8 flex`}
-    >
-      <div className="mr-2">
-        {prefix}
-      </div>
-      <div className="whitespace-pre-wrap flex flex-col">
-        <span>{props.message.content}</span>
-        {props.sources && props.sources.length ? <>
-          <code className="mt-4 mr-auto bg-slate-600 px-2 py-1 rounded">
-            <h2>
-              🔍 Sources:
-            </h2>
-          </code>
-          <code className="mt-1 mr-2 bg-slate-600 px-2 py-1 rounded text-xs">
-            {props.sources?.map((source, i) => (
-              <div className="mt-2" key={"source:" + i}>
-                {i + 1}. &quot;{source.pageContent}&quot;{
-                  source.metadata?.loc?.lines !== undefined
-                    ? <div><br/>Lines {source.metadata?.loc?.lines?.from} to {source.metadata?.loc?.lines?.to}</div>
-                    : ""
-                  }
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div className="max-w-[80%] bg-white shadow-md rounded-lg overflow-hidden">
+        <div className="flex items-start p-4">
+          <div className="bg-gray-200 rounded-full p-2 mr-3 flex-shrink-0">
+            {prefix}
+          </div>
+          <div className="flex-grow">
+            <div className="text-gray-800 font-normal text-sm whitespace-pre-wrap break-words">
+              {props.message.content}
+            </div>
+            {props.sources && props.sources.length > 0 && (
+              <div className="mt-2 border-t border-gray-200 pt-2">
+                <h3 className="text-xs font-semibold text-gray-600 mb-1">🔍 Sources:</h3>
+                <ul className="list-decimal list-inside text-xs space-y-1 text-gray-600">
+                  {props.sources.map((source, i) => (
+                    <li key={`source:${i}`} className="break-words">
+                      &quot;{source.pageContent}&quot;
+                      {source.metadata?.loc?.lines !== undefined && (
+                        <span className="block ml-4 text-xs text-gray-500">
+                          Lines {source.metadata.loc.lines.from} to {source.metadata.loc.lines.to}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            ))}
-          </code>
-        </> : ""}
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

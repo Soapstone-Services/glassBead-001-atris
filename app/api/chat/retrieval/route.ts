@@ -1,172 +1,196 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Message as VercelChatMessage, StreamingTextResponse } from "ai";
+import { createAudiusVectorStore } from '@/app/lib/vectorstore/vectorstore';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { ChatOpenAI } from '@langchain/openai';
+import { PromptTemplate } from '@langchain/core/prompts';
+import { RunnableSequence } from '@langchain/core/runnables';
+import { StringOutputParser } from '@langchain/core/output_parsers';
+import { AudiusAPI } from '../../../ai_sdk/tools/audius/audiusAPI';
+import { Effect } from 'effect';
+import { createClient } from '@supabase/supabase-js';
+import { createStuffDocumentsChain } from "langchain/chains/combine_documents";
+import { createRetrievalChain } from "langchain/chains/retrieval";
+import axios from 'axios';
 
-import { createClient } from "@supabase/supabase-js";
+const MAX_CONTEXT_LENGTH = 4000;
+const MAX_AUDIUS_DATA_LENGTH = 2000;
 
-import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
-import { PromptTemplate } from "@langchain/core/prompts";
-import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase";
-import { Document } from "@langchain/core/documents";
-import { RunnableSequence } from "@langchain/core/runnables";
-import {
-  BytesOutputParser,
-  StringOutputParser,
-} from "@langchain/core/output_parsers";
+const audiusAPI = new AudiusAPI(process.env.AUDIUS_API_KEY!, process.env.AUDIUS_API_SECRET!);
 
-export const runtime = "edge";
+export const runtime = 'nodejs';
 
-const combineDocumentsFn = (docs: Document[]) => {
-  const serializedDocs = docs.map((doc) => doc.pageContent);
-  return serializedDocs.join("\n\n");
-};
+const CONDENSE_TEMPLATE = `Given the following conversation about Audius music platform and a follow up question, rephrase the follow up question to be a standalone question about Audius.
 
-const formatVercelMessages = (chatHistory: VercelChatMessage[]) => {
-  const formattedDialogueTurns = chatHistory.map((message) => {
-    if (message.role === "user") {
-      return `Human: ${message.content}`;
-    } else if (message.role === "assistant") {
-      return `Assistant: ${message.content}`;
-    } else {
-      return `${message.role}: ${message.content}`;
-    }
-  });
-  return formattedDialogueTurns.join("\n");
-};
-
-const CONDENSE_QUESTION_TEMPLATE = `Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question, in its original language.
-
-<chat_history>
-  {chat_history}
-</chat_history>
-
+Chat History:
+{chat_history}
 Follow Up Input: {question}
 Standalone question:`;
-const condenseQuestionPrompt = PromptTemplate.fromTemplate(
-  CONDENSE_QUESTION_TEMPLATE,
-);
 
-const ANSWER_TEMPLATE = `You are an energetic talking puppy named Dana, and must answer all questions like a happy, talking dog would.
-Use lots of puns!
-
-Answer the question based only on the following context and chat history:
-<context>
-  {context}
-</context>
-
-<chat_history>
-  {chat_history}
-</chat_history>
-
+const ANSWER_TEMPLATE = `You are an Audius AI assistant. Answer based on:
+Context: {context}
+Chat history: {chat_history}
+Audius data: {audiusData}
 Question: {question}
-`;
-const answerPrompt = PromptTemplate.fromTemplate(ANSWER_TEMPLATE);
+If Audius data is available, use it as the primary source for your answer. For questions about specific tracks, users, or playlists, the Audius data should be considered the most accurate and up-to-date information. If Audius data is not available or not relevant to the question, use the context and web search results. Answer concisely and directly. If you don't have the exact information, say so.`;
 
-/**
- * This handler initializes and calls a retrieval chain. It composes the chain using
- * LangChain Expression Language. See the docs for more information:
- *
- * https://js.langchain.com/v0.2/docs/how_to/qa_chat_history_how_to/
- */
-export async function POST(req: NextRequest) {
+const combineDocumentsFn = (docs: any) => {
+  return docs.map((doc: any) => doc.pageContent).join('\n\n');
+};
+
+export async function POST(req: Request) {
+  if (!process.env.PUBLIC_SUPABASE_URL || !process.env.SUPABASE_PRIVATE_KEY) {
+    throw new Error("Missing Supabase environment variables");
+  }
+
+  const body = await req.json();
+  const messages = body.messages ?? [];
+  const question = messages[messages.length - 1].content;
+  const history = messages.slice(0, -1);
+
+  const supabaseClient = createClient(
+    process.env.PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_PRIVATE_KEY
+  );
+
+  console.log("PUBLIC_SUPABASE_URL:", process.env.PUBLIC_SUPABASE_URL);
+  console.log("SUPABASE_PRIVATE_KEY:", process.env.SUPABASE_PRIVATE_KEY ? "Set" : "Not set");
+  console.log("Supabase Client:", supabaseClient ? "Created" : "Not created");
+
+  const vectorStore = await createAudiusVectorStore(supabaseClient);
+
+  const embeddings = new OpenAIEmbeddings();
+
+  const relevantDocs = await vectorStore.similaritySearch(question, 2); // Reduced from 3 to 2
+
+  let context = combineDocumentsFn(relevantDocs).slice(0, MAX_CONTEXT_LENGTH);
+
+  const llm = new ChatOpenAI({
+    modelName: 'gpt-3.5-turbo',
+    temperature: 0,
+  });
+
+  async function determineQuestionType(question: string): Promise<'general' | 'specific'> {
+    const response = await llm.invoke([
+      { role: "system", content: "You are a helpful assistant that determines question types." },
+      { role: "user", content: `Determine if this is a general question about Audius or specific about tracks, users, or playlists. Answer "general" or "specific": ${question}` }
+    ]);
+
+    if (typeof response.content === 'string') {
+      return response.content.trim().toLowerCase() as 'general' | 'specific';
+    } else if (Array.isArray(response.content)) {
+      const textContent = response.content.find(item => 'text' in item);
+      if (textContent && 'text' in textContent) {
+        return textContent.text.trim().toLowerCase() as 'general' | 'specific';
+      }
+    }
+    throw new Error('Unexpected response format from LLM');
+  }
+
+  const questionType = await determineQuestionType(question);
+
+  const standaloneQuestionChain = RunnableSequence.from([
+    PromptTemplate.fromTemplate(CONDENSE_TEMPLATE),
+    llm,
+    new StringOutputParser(),
+  ]);
+
+  const standaloneQuestion = await standaloneQuestionChain.invoke({
+    question,
+    chat_history: history.map((m: any) => m.content).join('\n'),
+  });
+
+  let audiusData = await fetchAudiusData(standaloneQuestion);
+  let audiusInfo = "";
+  if (audiusData) {
+    audiusInfo = `The track "${audiusData.title}" by ${audiusData.artist} has ${audiusData.playCount} plays on Audius.`;
+  } else {
+    audiusInfo = "No specific Audius track information found.";
+  }
+
+  if (questionType === 'general') {
+    const webSearchResults = await performWebSearch(question);
+    context = `${context}\n\nWeb search results: ${webSearchResults}`.slice(0, MAX_CONTEXT_LENGTH);
+  }
+
+  const answerChain = RunnableSequence.from([
+    PromptTemplate.fromTemplate(ANSWER_TEMPLATE),
+    llm,
+    new StringOutputParser(),
+  ]);
+
+  const stream = await answerChain.stream({
+    context,
+    question: standaloneQuestion,
+    chat_history: history.map((m: any) => m.content).join('\n').slice(-500), // Reduced chat history length
+    audiusData: audiusInfo,
+  });
+
+  const { readable, writable } = new TransformStream();
+  stream.pipeTo(writable);
+
+  return new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
+}
+
+async function fetchAudiusData(query: string) {
+  console.log("Fetching Audius data for query:", query);
+  const apiKey = process.env.AUDIUS_API_KEY!;
+  const apiSecret = process.env.AUDIUS_API_SECRET!;
+  const audius = new AudiusAPI(apiKey, apiSecret);
+
   try {
-    const body = await req.json();
-    const messages = body.messages ?? [];
-    const previousMessages = messages.slice(0, -1);
-    const currentMessageContent = messages[messages.length - 1].content;
+    // Extract track name and artist from the query
+    const match = query.match(/(?:"([^"]+)"|(\S+))\s+by\s+(\S+)/i);
+    if (!match) {
+      return null;
+    }
 
-    const model = new ChatOpenAI({
-      model: "gpt-3.5-turbo-0125",
-      temperature: 0.2,
-    });
+    const trackName = match[1] || match[2];
+    const artistName = match[3];
 
-    const client = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PRIVATE_KEY!,
+    const tracksEffect = audius.searchTracks(`${trackName} ${artistName}`, { limit: 5 });
+    const tracks = await Effect.runPromise(tracksEffect);
+
+    const specificTrack = tracks.find(track => 
+      track.title.toLowerCase().includes(trackName.toLowerCase()) &&
+      track.user.name.toLowerCase().includes(artistName.toLowerCase())
     );
-    const vectorstore = new SupabaseVectorStore(new OpenAIEmbeddings(), {
-      client,
-      tableName: "documents",
-      queryName: "match_documents",
+
+    if (specificTrack) {
+      console.log("Specific track details fetched:", specificTrack);
+      return {
+        title: specificTrack.title,
+        artist: specificTrack.user.name,
+        playCount: specificTrack.playCount,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error fetching Audius data:", error);
+    return null;
+  }
+}
+
+async function performWebSearch(query: string): Promise<string> {
+  try {
+    const response = await axios.post('https://api.tavily.com/search', {
+      api_key: process.env.TAVILY_API_KEY,
+      query: query,
+      search_depth: "basic",
+      max_results: 3
     });
 
-    /**
-     * We use LangChain Expression Language to compose two chains.
-     * To learn more, see the guide here:
-     *
-     * https://js.langchain.com/docs/guides/expression_language/cookbook
-     *
-     * You can also use the "createRetrievalChain" method with a
-     * "historyAwareRetriever" to get something prebaked.
-     */
-    const standaloneQuestionChain = RunnableSequence.from([
-      condenseQuestionPrompt,
-      model,
-      new StringOutputParser(),
-    ]);
+    const results = response.data.results;
+    let formattedResults = '';
 
-    let resolveWithDocuments: (value: Document[]) => void;
-    const documentPromise = new Promise<Document[]>((resolve) => {
-      resolveWithDocuments = resolve;
+    results.forEach((result: any, index: number) => {
+      formattedResults += `${index + 1}. ${result.title}\n${result.content}\n\n`;
     });
 
-    const retriever = vectorstore.asRetriever({
-      callbacks: [
-        {
-          handleRetrieverEnd(documents) {
-            resolveWithDocuments(documents);
-          },
-        },
-      ],
-    });
-
-    const retrievalChain = retriever.pipe(combineDocumentsFn);
-
-    const answerChain = RunnableSequence.from([
-      {
-        context: RunnableSequence.from([
-          (input) => input.question,
-          retrievalChain,
-        ]),
-        chat_history: (input) => input.chat_history,
-        question: (input) => input.question,
-      },
-      answerPrompt,
-      model,
-    ]);
-
-    const conversationalRetrievalQAChain = RunnableSequence.from([
-      {
-        question: standaloneQuestionChain,
-        chat_history: (input) => input.chat_history,
-      },
-      answerChain,
-      new BytesOutputParser(),
-    ]);
-
-    const stream = await conversationalRetrievalQAChain.stream({
-      question: currentMessageContent,
-      chat_history: formatVercelMessages(previousMessages),
-    });
-
-    const documents = await documentPromise;
-    const serializedSources = Buffer.from(
-      JSON.stringify(
-        documents.map((doc) => {
-          return {
-            pageContent: doc.pageContent.slice(0, 50) + "...",
-            metadata: doc.metadata,
-          };
-        }),
-      ),
-    ).toString("base64");
-
-    return new StreamingTextResponse(stream, {
-      headers: {
-        "x-message-index": (previousMessages.length + 1).toString(),
-        "x-sources": serializedSources,
-      },
-    });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: e.status ?? 500 });
+    return formattedResults.trim() || `No relevant web search results found for "${query}".`;
+  } catch (error) {
+    console.error('Error performing web search:', error);
+    return `Error performing web search for "${query}".`;
   }
 }
