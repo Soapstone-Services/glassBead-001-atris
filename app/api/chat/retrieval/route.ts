@@ -4,17 +4,11 @@ import { ChatOpenAI } from '@langchain/openai';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { RunnableSequence } from '@langchain/core/runnables';
 import { StringOutputParser } from '@langchain/core/output_parsers';
-import { AudiusAPI } from '../../../ai_sdk/tools/audius/audiusAPI';
-import { Effect } from 'effect';
 import { createClient } from '@supabase/supabase-js';
-import { createStuffDocumentsChain } from "langchain/chains/combine_documents";
-import { createRetrievalChain } from "langchain/chains/retrieval";
-import axios from 'axios';
+import { fetchAudiusData } from '@/app/lib/chat/audiusData';
+import { performWebSearch } from '@/app/lib/chat/webSearch';
 
 const MAX_CONTEXT_LENGTH = 4000;
-const MAX_AUDIUS_DATA_LENGTH = 2000;
-
-const audiusAPI = new AudiusAPI(process.env.AUDIUS_API_KEY!, process.env.AUDIUS_API_SECRET!);
 
 export const runtime = 'nodejs';
 
@@ -30,7 +24,12 @@ Context: {context}
 Chat history: {chat_history}
 Audius data: {audiusData}
 Question: {question}
-If Audius data is available, use it as the primary source for your answer. For questions about specific tracks, users, or playlists, the Audius data should be considered the most accurate and up-to-date information. If Audius data is not available or not relevant to the question, use the context and web search results. Answer concisely and directly. If you don't have the exact information, say so.`;
+
+If Audius data is available, use it as the primary source for your answer. The Audius data may contain information about tracks, artists, or playlists. Incorporate this information into your response, providing details such as play counts, follower counts, or track counts as appropriate.
+
+For questions about specific tracks, always include the play count if it's available in the Audius data. For artists, include follower count and track count if available.
+
+Answer concisely and directly. If you don't have the exact information, say so.`;
 
 const combineDocumentsFn = (docs: any) => {
   return docs.map((doc: any) => doc.pageContent).join('\n\n');
@@ -51,15 +50,11 @@ export async function POST(req: Request) {
     process.env.SUPABASE_PRIVATE_KEY
   );
 
-  console.log("PUBLIC_SUPABASE_URL:", process.env.PUBLIC_SUPABASE_URL);
-  console.log("SUPABASE_PRIVATE_KEY:", process.env.SUPABASE_PRIVATE_KEY ? "Set" : "Not set");
-  console.log("Supabase Client:", supabaseClient ? "Created" : "Not created");
-
   const vectorStore = await createAudiusVectorStore(supabaseClient);
 
   const embeddings = new OpenAIEmbeddings();
 
-  const relevantDocs = await vectorStore.similaritySearch(question, 2); // Reduced from 3 to 2
+  const relevantDocs = await vectorStore.similaritySearch(question, 2);
 
   let context = combineDocumentsFn(relevantDocs).slice(0, MAX_CONTEXT_LENGTH);
 
@@ -68,7 +63,7 @@ export async function POST(req: Request) {
     temperature: 0,
   });
 
-  async function determineQuestionType(question: string): Promise<'general' | 'specific'> {
+  const determineQuestionType = async (question: string): Promise<'general' | 'specific'> => {
     const response = await llm.invoke([
       { role: "system", content: "You are a helpful assistant that determines question types." },
       { role: "user", content: `Determine if this is a general question about Audius or specific about tracks, users, or playlists. Answer "general" or "specific": ${question}` }
@@ -83,7 +78,7 @@ export async function POST(req: Request) {
       }
     }
     throw new Error('Unexpected response format from LLM');
-  }
+  };
 
   const questionType = await determineQuestionType(question);
 
@@ -98,13 +93,8 @@ export async function POST(req: Request) {
     chat_history: history.map((m: any) => m.content).join('\n'),
   });
 
-  let audiusData = await fetchAudiusData(standaloneQuestion);
-  let audiusInfo = "";
-  if (audiusData) {
-    audiusInfo = `The track "${audiusData.title}" by ${audiusData.artist} has ${audiusData.playCount} plays on Audius.`;
-  } else {
-    audiusInfo = "No specific Audius track information found.";
-  }
+  const audiusData = await fetchAudiusData(standaloneQuestion);
+  let audiusInfo = audiusData ? formatAudiusData(audiusData) : "No specific Audius information found.";
 
   if (questionType === 'general') {
     const webSearchResults = await performWebSearch(question);
@@ -120,7 +110,7 @@ export async function POST(req: Request) {
   const stream = await answerChain.stream({
     context,
     question: standaloneQuestion,
-    chat_history: history.map((m: any) => m.content).join('\n').slice(-500), // Reduced chat history length
+    chat_history: history.map((m: any) => m.content).join('\n').slice(-500),
     audiusData: audiusInfo,
   });
 
@@ -132,65 +122,56 @@ export async function POST(req: Request) {
   });
 }
 
-async function fetchAudiusData(query: string) {
-  console.log("Fetching Audius data for query:", query);
-  const apiKey = process.env.AUDIUS_API_KEY!;
-  const apiSecret = process.env.AUDIUS_API_SECRET!;
-  const audius = new AudiusAPI(apiKey, apiSecret);
-
-  try {
-    // Extract track name and artist from the query
-    const match = query.match(/(?:"([^"]+)"|(\S+))\s+by\s+(\S+)/i);
-    if (!match) {
-      return null;
-    }
-
-    const trackName = match[1] || match[2];
-    const artistName = match[3];
-
-    const tracksEffect = audius.searchTracks(`${trackName} ${artistName}`, { limit: 5 });
-    const tracks = await Effect.runPromise(tracksEffect);
-
-    const specificTrack = tracks.find(track => 
-      track.title.toLowerCase().includes(trackName.toLowerCase()) &&
-      track.user.name.toLowerCase().includes(artistName.toLowerCase())
-    );
-
-    if (specificTrack) {
-      console.log("Specific track details fetched:", specificTrack);
-      return {
-        title: specificTrack.title,
-        artist: specificTrack.user.name,
-        playCount: specificTrack.playCount,
-      };
-    }
-
-    return null;
-  } catch (error) {
-    console.error("Error fetching Audius data:", error);
-    return null;
+function formatAudiusData(audiusData: any): string {
+  switch (audiusData.type) {
+    case 'track':
+      return `Track: "${audiusData.data.title}" by ${audiusData.data.user.name} (@${audiusData.data.user.handle})
+      Plays: ${audiusData.data.playCount}
+      Duration: ${audiusData.data.duration} seconds
+      Genre: ${audiusData.data.genre}
+      Mood: ${audiusData.data.mood || 'Not specified'}
+      Release Date: ${audiusData.data.releaseDate || 'Not specified'}`;
+    case 'artist':
+      return `Artist: ${audiusData.data.name}
+      Handle: @${audiusData.data.handle}
+      Followers: ${audiusData.data.followerCount}
+      Tracks: ${audiusData.data.trackCount}`;
+    case 'playlist':
+      return `Playlist: "${audiusData.data.playlistName}"
+      Creator: ${audiusData.data.user}
+      Tracks: ${audiusData.data.trackCount}`;
+    case 'popularTrack':
+      return `The ${audiusData.data.rank}${getRankSuffix(audiusData.data.rank)} most popular track by ${audiusData.data.artist} on Audius is "${audiusData.data.title}" with ${audiusData.data.playCount} plays.
+      Genre: ${audiusData.data.genre}
+      Mood: ${audiusData.data.mood || 'Not specified'}
+      Release Date: ${audiusData.data.releaseDate || 'Not specified'}`;
+    case 'noMatch':
+      let info = `No exact match found for "${audiusData.data.searchedTrack}" by ${audiusData.data.searchedArtist}. Here are some similar tracks:\n`;
+      audiusData.data.availableTracks.forEach((track: any, index: number) => {
+        info += `${index + 1}. "${track.title}" by ${track.artist} (${track.playCount} plays)\n`;
+      });
+      return info;
+    case 'remix':
+      return `Remix: "${audiusData.data.title}" by ${audiusData.data.artist}
+      Original Track: "${audiusData.data.remixOf.title}" by ${audiusData.data.remixOf.user}
+      Plays: ${audiusData.data.remixOf.playCount}`;
+    case 'genre':
+      return `Genre: ${audiusData.data.genre}
+      Popular Artists: ${audiusData.data.tracks.map((track: any) => track.artist).join(', ')}
+      Popular Tracks: ${audiusData.data.tracks.map((track: any) => track.title).join(', ')}`;
+    default:
+      return "Unrecognized Audius data format.";
   }
 }
 
-async function performWebSearch(query: string): Promise<string> {
-  try {
-    const response = await axios.post('https://api.tavily.com/search', {
-      api_key: process.env.TAVILY_API_KEY,
-      query: query,
-      search_depth: "basic",
-      max_results: 3
-    });
-
-    const results = response.data.results;
-    let formattedResults = '';
-
-    results.forEach((result: any, index: number) => {
-      formattedResults += `${index + 1}. ${result.title}\n${result.content}\n\n`;
-    });
-
-    return formattedResults.trim() || `No relevant web search results found for "${query}".`;
-  } catch (error) {
-    console.error('Error performing web search:', error);
-    return `Error performing web search for "${query}".`;
+function getRankSuffix(rank: number): string {
+  if (rank % 10 === 1 && rank % 100 !== 11) {
+    return 'st';
+  } else if (rank % 10 === 2 && rank % 100 !== 12) {
+    return 'nd';
+  } else if (rank % 10 === 3 && rank % 100 !== 13) {
+    return 'rd';
+  } else {
+    return 'th';
   }
 }

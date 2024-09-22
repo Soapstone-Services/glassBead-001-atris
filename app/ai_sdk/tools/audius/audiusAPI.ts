@@ -2,7 +2,7 @@ import { AudiusAPIBase } from "./base/AudiusAPIBase";
 import { AudiusTracksAPI } from "./tracks/AudiusTracksAPI";
 import { AudiusUsersAPI } from "./users/AudiusUsersAPI";
 import { AudiusPlaylistsAPI } from "./playlists/AudiusPlaylistsAPI";
-import { sdk, Track, User, Playlist } from '@audius/sdk';
+import { sdk, Track, User, Playlist, GetTrendingTracksRequest } from '@audius/sdk';
 import { Effect } from 'effect';
 
 let audiusSdk: any;
@@ -161,6 +161,36 @@ export class AudiusAPI extends AudiusAPIBase {
         return result.data;
       }),
       Effect.mapError(error => new Error(`Error fetching track details: ${error}`))
+    );
+  }
+
+  // Method to get track information
+  getTrackInfo(trackId: string): Effect.Effect<Track, Error> {
+    return Effect.tryPromise(() => 
+      this.audiusSdk.tracks.getTrack({
+        trackId
+      })
+    ).pipe(
+      Effect.map(result => {
+        if (!result.data) {
+          throw new Error(`Track with ID ${trackId} not found`);
+        }
+        return result.data;
+      }),
+      Effect.mapError(error => new Error(`Error fetching track info: ${error}`))
+    );
+  }
+
+  // Add this new method to get trending tracks
+  getTrendingTracks(options?: { time?: GetTrendingTracksRequest['time']; genre?: string; }): Effect.Effect<Track[], Error> {
+    return Effect.tryPromise(() => 
+      this.audiusSdk.tracks.getTrendingTracks({
+        time: options?.time || 'week',
+        genre: options?.genre
+      })
+    ).pipe(
+      Effect.map(result => result.data || []),
+      Effect.mapError(error => new Error(`Error fetching trending tracks: ${error}`))
     );
   }
 }
