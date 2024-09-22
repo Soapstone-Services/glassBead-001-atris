@@ -11,7 +11,7 @@ Hadn't seen an AI integration template for Audius yet, so here we are. I started
 
 ## Some notes
 
-There's a lot of unused/context-impertinent code from the [Langchain x Next.js Starter Template](https://github.com/langchain-ai/langchain-nextjs-template/tree/main) from the folks at Langchain, as well as half-built support for similarity searches via Supabase. I'm open-sourcing the integration now and tidying up later in the interest of adhering to the hackathon rules, competitive spirit and all that.
+There's a lot of unused/context-impertinent code from the [Langchain x Next.js Starter Template](https://github.com/langchain-ai/langchain-nextjs-template/tree/main) from the folks at Langchain (a template I drew from liberally: much thanks!!), as well as half-built support for similarity searches via Supabase. I'm open-sourcing the integration now and tidying up later in the interest of adhering to the hackathon rules, competitive spirit and all that.
 
 The chatbot in this repo is not good: you can ask it how many plays a certain song by a certain artist has, and you can perform essential ranking-based queries (i.e. "What is Deadmau5's most popular track on Audius?"), but beyond that it's very incomplete: what I hope this repo can do for other Audius devs is eliminate a few days of troubleshooting and refactoring if you're trying to get off the ground with a Langchain x Audius application.
 
