@@ -5,7 +5,7 @@
 Hadn't seen an AI integration template for Audius yet, so here we are. I started building out a chatbot to demonstrate that the integration works, and the chatbot has become a larger-scale undertaking that I'll be working on for the [Amplify Hackathon (09/23 - 09/30)](https://www.audius.events/e/hackathon) separately from this repo, but I thought the community might appreciate a jumping-off point for building other apps with Langchain that involve the Audius API or SDK.
 
 - [Simple chat](/app/api/chat/route.ts)
-- [Fetch and format Audius data in Supabase](app/api/chat/retrieval/route.ts)
+- [Fetch and format Audius data for Supabase](app/api/chat/retrieval/route.ts)
 - [Ingestion/embeddings for vector storage of Audius data](scripts/ingestAudiusData.ts)
 - [READMEASSISTANT](READMEASSISTANT.md): READMEASSISTANT is a rudimentary tool I came up with to persist some interthread context between LLM conversations in Cursor. Have the AI update a READMEASSISTANT periodically with the goal of "passing the baton" to another AI assistant after the current session ends. Experiment with it.
 
